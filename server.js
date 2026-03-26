@@ -77,6 +77,7 @@ app.post('/webhook', (req, res) => {
 
   const isNew = addBuyer(email);
   console.log(`[Webhook] Email "${email}" — ${isNew ? 'added' : 'already exists'}.`);
+  if (isNew && client.isReady()) updateStatus();
   return res.status(200).json({ ok: true, email, isNew });
 });
 
@@ -137,8 +138,17 @@ function buildVerifyMessage() {
   return { embeds: [embed], components: [row] };
 }
 
+function updateStatus() {
+  const count = loadBuyers().length;
+  client.user.setPresence({
+    activities: [{ name: `${count} אנשים קנו את חבילת RN`, type: 3 }], // type 3 = Watching
+    status: 'online',
+  });
+}
+
 client.once('clientReady', async () => {
   console.log(`[Bot] Logged in as ${client.user.tag}`);
+  updateStatus();
 
   try {
     const channel = await client.channels.fetch(CHANNEL_ID);
