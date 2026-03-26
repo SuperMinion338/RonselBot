@@ -1,3 +1,5 @@
+require('dotenv').config(); // must be first — loads .env before anything else
+
 // ============================================================
 // CONFIGURATION — values are loaded from .env file
 // ============================================================
@@ -5,8 +7,6 @@ const TOKEN      = process.env.TOKEN;
 const ROLE_ID    = process.env.ROLE_ID;
 const CHANNEL_ID = process.env.CHANNEL_ID;
 // ============================================================
-
-require('dotenv').config(); // optional: load from .env if present
 
 const express    = require('express');
 const fs         = require('fs');
