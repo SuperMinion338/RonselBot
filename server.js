@@ -3,9 +3,10 @@ require('dotenv').config(); // must be first — loads .env before anything else
 // ============================================================
 // CONFIGURATION — values are loaded from .env file
 // ============================================================
-const TOKEN      = process.env.TOKEN;
-const ROLE_ID    = process.env.ROLE_ID;
-const CHANNEL_ID = process.env.CHANNEL_ID;
+const TOKEN           = process.env.TOKEN;
+const ROLE_ID         = process.env.ROLE_ID;
+const CHANNEL_ID      = process.env.CHANNEL_ID;
+const WELCOME_CHANNEL = '1459513155679158349';
 // ============================================================
 
 const express    = require('express');
@@ -110,6 +111,7 @@ app.listen(PORT, () => {
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
+    GatewayIntentBits.GuildMembers,
   ],
 });
 
@@ -160,6 +162,26 @@ client.once('clientReady', async () => {
     console.log(`[Bot] Verify message sent to #${channel.name}`);
   } catch (err) {
     console.error('[Bot] Failed to send startup message:', err.message);
+  }
+});
+
+// ── Welcome message on member join ──────────────────────────
+client.on('guildMemberAdd', async (member) => {
+  try {
+    const channel = await client.channels.fetch(WELCOME_CHANNEL);
+    if (!channel) return;
+
+    const embed = new EmbedBuilder()
+      .setColor(0x5865F2)
+      .setDescription(
+        `היי ${member}!\nברוך הבא לשרת הרשמי לחבילת העריכה **RN** 🎉\n\nWelcome!`
+      )
+      .setThumbnail(member.user.displayAvatarURL({ size: 256 }))
+      .setFooter({ text: 'RN Official Server' });
+
+    await channel.send({ embeds: [embed] });
+  } catch (err) {
+    console.error('[Bot] Failed to send welcome message:', err.message);
   }
 });
 
