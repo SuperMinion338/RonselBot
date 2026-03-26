@@ -47,9 +47,9 @@ function addBuyer(email) {
   if (!buyers.includes(normalised)) {
     buyers.push(normalised);
     saveBuyers(buyers);
-    return true; // newly added
+    return true;
   }
-  return false;  // already existed
+  return false;
 }
 
 function isBuyer(email) {
@@ -67,7 +67,6 @@ app.post('/webhook', (req, res) => {
   const payload = req.body;
   console.log('[Webhook] Received payload:', JSON.stringify(payload, null, 2));
 
-  // Payhip sends email as "email" or "buyer_email" depending on the event type
   const email = payload.email || payload.buyer_email;
 
   if (!email) {
@@ -118,23 +117,25 @@ const client = new Client({
 function buildVerifyMessage() {
   const embed = new EmbedBuilder()
     .setColor(0x5865F2)
-    .setTitle('Verify Your Purchase')
+    .setTitle('אימות רכישה — חבילת RN')
     .setDescription(
-      'Purchased a product? Click the button below and enter the email address\n' +
-      'you used at checkout to receive your exclusive role.'
+      '👋 רכשת את חבילת **RN**? מעולה!\n\n' +
+      'לחץ על הכפתור למטה, הכנס את כתובת האימייל שבה השתמשת בקנייה, ' +
+      'ותקבל גישה מיידית לערוצים הבלעדיים.\n\n' +
+      '> כל אימייל ניתן לשימוש פעם אחת בלבד.'
     )
-    .setFooter({ text: 'Each email can only be used once.' });
+    .setFooter({ text: 'RN • מערכת אימות רכישות' });
 
   const button = new ButtonBuilder()
     .setCustomId('verify_purchase')
-    .setLabel('Verify Purchase')
+    .setLabel('אמת רכישה')
     .setStyle(ButtonStyle.Primary);
 
   const row = new ActionRowBuilder().addComponents(button);
   return { embeds: [embed], components: [row] };
 }
 
-client.once('ready', async () => {
+client.once('clientReady', async () => {
   console.log(`[Bot] Logged in as ${client.user.tag}`);
 
   try {
@@ -144,7 +145,17 @@ client.once('ready', async () => {
       return;
     }
 
-    // Send a fresh verify message on every startup
+    // Check if the bot already sent a verify message — if so, skip
+    const messages = await channel.messages.fetch({ limit: 20 });
+    const alreadySent = messages.some(
+      (m) => m.author.id === client.user.id && m.components.length > 0
+    );
+
+    if (alreadySent) {
+      console.log('[Bot] Verify message already exists in channel — skipping.');
+      return;
+    }
+
     await channel.send(buildVerifyMessage());
     console.log(`[Bot] Verify message sent to #${channel.name}`);
   } catch (err) {
@@ -155,46 +166,45 @@ client.once('ready', async () => {
 client.on('interactionCreate', async (interaction) => {
   // ── Button press → open modal ──────────────────────────────
   if (interaction.isButton() && interaction.customId === 'verify_purchase') {
-    const modal = new ModalBuilder()
-      .setCustomId('verify_modal')
-      .setTitle('Purchase Verification');
+    try {
+      const modal = new ModalBuilder()
+        .setCustomId('verify_modal')
+        .setTitle('אימות רכישה');
 
-    const emailInput = new TextInputBuilder()
-      .setCustomId('email_input')
-      .setLabel('Email used at checkout')
-      .setStyle(TextInputStyle.Short)
-      .setPlaceholder('you@example.com')
-      .setRequired(true);
+      const emailInput = new TextInputBuilder()
+        .setCustomId('email_input')
+        .setLabel('האימייל שבו השתמשת בקנייה')
+        .setStyle(TextInputStyle.Short)
+        .setPlaceholder('example@gmail.com')
+        .setRequired(true);
 
-    modal.addComponents(new ActionRowBuilder().addComponents(emailInput));
-    await interaction.showModal(modal);
+      modal.addComponents(new ActionRowBuilder().addComponents(emailInput));
+      await interaction.showModal(modal);
+    } catch (err) {
+      // Ignore "already acknowledged" errors (can happen if two instances run)
+      if (err.code !== 40060) console.error('[Bot] Modal error:', err.message);
+    }
     return;
   }
 
   // ── Modal submit → check email → assign role ───────────────
   if (interaction.isModalSubmit() && interaction.customId === 'verify_modal') {
-    await interaction.deferReply({ ephemeral: true });
+    try {
+      await interaction.deferReply({ ephemeral: true });
+    } catch (err) {
+      if (err.code !== 40060) console.error('[Bot] Defer error:', err.message);
+      return;
+    }
 
     const email = interaction.fields.getTextInputValue('email_input').trim();
-
-    // Call our own /check endpoint
-    let valid = false;
-    try {
-      // Use local check directly (same process) for reliability
-      valid = isBuyer(email);
-    } catch (err) {
-      console.error('[Bot] Error checking email:', err.message);
-      return interaction.editReply({
-        content: 'An error occurred while verifying your email. Please try again later.',
-      });
-    }
+    const valid = isBuyer(email);
 
     if (!valid) {
       return interaction.editReply({
         content:
-          `❌ The email **${email}** was not found in our records.\n` +
-          'Make sure you are using the same email you used to purchase.\n' +
-          'If you believe this is an error, contact support.',
+          `❌ האימייל **${email}** לא נמצא במערכת.\n` +
+          'וודא שאתה משתמש באותו אימייל שבו קנית.\n' +
+          'אם אתה חושב שמדובר בטעות, פנה לתמיכה.',
       });
     }
 
@@ -203,7 +213,7 @@ client.on('interactionCreate', async (interaction) => {
       const member = interaction.member;
       if (member.roles.cache.has(ROLE_ID)) {
         return interaction.editReply({
-          content: '✅ You already have the verified role!',
+          content: '✅ כבר יש לך את הרול המאומת!',
         });
       }
 
@@ -211,22 +221,22 @@ client.on('interactionCreate', async (interaction) => {
       console.log(`[Bot] Assigned role to ${member.user.tag} (${email})`);
       return interaction.editReply({
         content:
-          '✅ Verification successful! You have been granted access.\n' +
-          'Welcome, and enjoy your purchase!',
+          '✅ האימות הצליח! קיבלת גישה לחבילת **RN**.\n' +
+          'ברוך הבא, תהנה מהחומר!',
       });
     } catch (err) {
       console.error('[Bot] Failed to assign role:', err.message);
       return interaction.editReply({
         content:
-          '⚠️ Your purchase was verified but I could not assign your role.\n' +
-          'Please contact an admin and show them this message.',
+          '⚠️ הרכישה אומתה אבל לא הצלחתי להוסיף את הרול.\n' +
+          'פנה לאדמין עם הודעה זו.',
       });
     }
   }
 });
 
 // Start the bot
-client.login(process.env.TOKEN || TOKEN).catch((err) => {
+client.login(TOKEN).catch((err) => {
   console.error('[Bot] Login failed:', err.message);
   process.exit(1);
 });
